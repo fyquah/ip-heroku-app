@@ -2,7 +2,7 @@ var express = require("express");
 var app = express();
 var MongoClient = require('mongodb').MongoClient;
 var bodyParser = require('body-parser')
-const db_url = process.env.MONGO_DB_URL;
+const db_url = process.env.MONGOLAB_URI;
 var db = null;
 
 MongoClient.connect(db_url, function(err, db_in) {
@@ -15,23 +15,46 @@ app.use(bodyParser.urlencoded({
 })); 
 
 app.post("/", function(req, res) {
-	db.collection('ips').insertOne({
-		"ip": req.body.ip
-	}, function(err){
-		if (!err)
-			res.send("Succeed");
-	});
+    var collection = db.collection("ips")
+    collection.findOne({}, {"sort": [["date", "desc"]]}, function(err, doc){
+        if(err) return;
+        console.log(doc)
+        var new_entry = {
+            "ip": req.body.ip,
+            "date": new Date(),
+        }
+        if (doc) {
+            console.log(doc)
+            collection.updateOne(
+                { "_id": doc._id },
+                { $set: new_entry },
+                function(err){
+                    if (!err) res.send("Succeed");
+                    else res.send("Failed!")
+                }
+            );
+        } else {
+            collection.insertOne(
+                new_entry,
+                function(err){
+                    if (!err) res.send("Succeed");
+                    else res.send("Failed!")
+                }
+            );
+        }
+    })
 });
 
 app.get("/", function(req, res) {
-	var cursor = db.collection.find().limit(1).sort({"$natural":-1});
-	cursor.each(function(err, doc) {
-		if (doc && doc.ip) {
-			res.send(doc.ip);
-		} else {
-			res.send("Failed");
-		}
-	});
+    console.log("Request GET")
+    var collection = db.collection("ips")
+    cursor = collection.findOne({}, {"sort": [["date", "desc"]]}, function(err, doc){
+        if (doc && doc.ip) {
+            res.send(doc.ip);
+        } else {
+            res.send("no ip in store");
+        }
+    })
 });
 
 app.listen(3000);
